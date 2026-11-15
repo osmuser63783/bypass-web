@@ -9,7 +9,8 @@ import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFi
 import { join } from 'node:path';
 
 const PUBLISH = ['index.html', 'app', 'src', 'data', 'vendor', 'ui-map.js', 'export.js', 'examples.js', 'serve.py',
-  'LICENSES.txt', 'LICENSE.txt', 'icon.svg', 'icon-32.png', 'icon-180.png'];
+  'LICENSES.txt', 'LICENSE.txt', 'icon.svg', 'icon-32.png', 'icon-180.png',
+  'preview.jpg', 'google630684d18807411d.html'];   // link previews; Google Search Console's verification
 // The analytics token comes from --analytics or, for a Git-connected Cloudflare Pages build, from the
 // BYPASS_ANALYTICS_TOKEN environment variable; unset or empty, the release counts nothing.
 const args = process.argv.slice(2);
