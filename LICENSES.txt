@@ -1,0 +1,101 @@
+Bypass Web: licences and credits
+============================================
+
+This page (Bypass) is free software under the GNU Affero General Public License, version 3 or (at your
+option) any later version (full text: LICENSE.txt).
+Its JavaScript (app.js, ui-map.js, export.js, examples.js and src/) is served as written, not minified.
+
+Map data © OpenStreetMap contributors, available under the Open Database Licence (ODbL):
+https://www.openstreetmap.org/copyright
+The default planet bundle is published by Open Planet Data (https://openplanetdata.com).
+
+
+Overpass API
+------------
+Bypass reimplements the query language of the Overpass API (https://github.com/drolbr/Overpass-API).
+src/geometry.js, src/ovindex.js, src/areas.js, src/expr.js, src/localize.js and src/render.js port parts
+of its C++ source.
+Copyright (C) 2008-2018 Roland Olbricht et al. AGPL-3.0-or-later.
+
+
+Overpass Turbo and overpass-wizard
+----------------------------------
+src/turbo.js ports Overpass Turbo's shortcut expansion (https://github.com/tyrasd/overpass-turbo), and
+vendor/overpass-wizard.js bundles overpass-wizard 0.0.9 (https://github.com/tyrasd/overpass-wizard)
+unchanged. MIT licence:
+
+Copyright (c) 2012 Martin Raifer <tyr.asd@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Please note that this software includes other libraries or parts of libraries which have their own
+license file or license annotation in the source code and may be released under different licences.
+
+
+iD tagging schema
+-----------------
+data/presets-en.json holds preset names, terms and tags from id-tagging-schema 7.3.0
+(https://github.com/openstreetmap/id-tagging-schema). ISC licence:
+
+Copyright (c) iD Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee
+is hereby granted, provided that the above copyright notice and this permission notice appear in all
+copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE
+FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+tag2link
+--------
+data/tag2link.json is built from tag2link 2026.5.21 (https://github.com/JOSM/tag2link), whose data comes
+from Wikidata (CC0) and the OpenStreetMap wiki. ISC licence:
+
+ISC License
+
+Copyright (c) 2020, Simon Legner
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+Libraries in vendor/ (each with its licence file)
+-------------------------------------------------
+MapLibre GL JS 6.18.0 (https://maplibre.org), BSD 3-Clause: vendor/maplibre-gl-6.18.0/LICENSE.txt
+CodeMirror 6 (https://codemirror.net), MIT: @codemirror/state 6.7.6, view 6.43.15, language 6.13.1, commands 6.11.1,
+  streamparser 6.0.0; @lezer/common 1.5.5, @lezer/highlight 1.2.5; style-mod 4.1.4, w3c-keyname 2.2.8, crelt 1.0.7,
+  @marijn/find-cluster-break 1.0.4: vendor/codemirror-6/LICENSE.txt
+js-yaml 4.3.2 (https://github.com/nodeca/js-yaml), MIT: vendor/js-yaml-4.3.2/LICENSE.txt
+
+
+Maps and styling
+----------------
+Basemaps: OpenFreeMap (https://openfreemap.org, OpenMapTiles schema) and OpenStreetMap's raster tiles,
+credited on the map. The front-matter styling follows the format documented by Overpass Ultra
+(https://overpass-ultra.us); no Ultra code is used.

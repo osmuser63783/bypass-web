@@ -1,0 +1,508 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- what the page may load and run: scripts and styles only from here, no frames, forms, plugins or <base> -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; connect-src * data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<title>Bypass Web</title>
+<!-- what search engines and link previews (forums, chat apps) show. LAUNCH: add og:url, og:image and
+     <link rel="canonical"> with the final address; preview images need an absolute URL -->
+<meta name="description" content="Run Overpass QL queries on OpenStreetMap data saved in your browser: load an area once, then query it with no server and no rate limit.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bypass Web">
+<meta property="og:title" content="Bypass Web: Overpass queries in your browser">
+<meta property="og:description" content="Run Overpass QL queries on OpenStreetMap data saved in your browser: load an area once, then query it with no server and no rate limit.">
+<meta name="twitter:card" content="summary">
+<!-- the icon: a road detouring round a town, in the results' colours (Turbo has a steering wheel, Ultra a speedometer) -->
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="vendor/maplibre-gl-6.18.0/maplibre-gl.css" integrity="sha384-S+OnE5M4U3Qc2nR0RgljGrVs06xqfRg8L7uFk/pOF5+sRuSDG4oKkqKZmFrx7w09">
+<script src="vendor/js-yaml-4.3.2/js-yaml.min.js" integrity="sha384-uwLg6oO8ZhFG2SuQfgmkMtosjtrFYlkPspa/cXS+b3D8GLRTHMDl/mTwqImdlKQO"></script>
+<script src="examples.js"></script>
+<script src="vendor/overpass-wizard.js"></script>
+<script src="export.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1d232b; --muted: #5f6b7a; --border: #dde2e8;
+  --accent: #2563eb; --accent-text: #ffffff; --warn-bg: #fff6e0; --warn: #8a5a00;
+  --err-bg: #fdecec; --err: #a12323; --ok: #18794e; --code-bg: #fbfcfd;
+  --kw: #7c3aed; --str: #0f766e; --num: #b45309; --cmt: #8a94a3; --op: #be185d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151a; --panel: #181d24; --text: #e4e8ee; --muted: #9aa5b4; --border: #2a313b;
+    --accent: #4f8cff; --accent-text: #0b0e12; --warn-bg: #2d2412; --warn: #f0c060;
+    --err-bg: #2e1616; --err: #ff9a9a; --ok: #5fd39a; --code-bg: #141920;
+    --kw: #c4a5ff; --str: #5eead4; --num: #fbbf24; --cmt: #6b7686; --op: #f472b6;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  border-bottom: 1px solid var(--border); background: var(--panel); }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+header .meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+header .meta strong { color: var(--text); font-weight: 600; }
+header .spacer { flex: 1; }
+button, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: .55; cursor: default; }
+/* feedback: hover, pressed, keyboard focus */
+button, select { transition: background-color .12s, border-color .12s, box-shadow .12s, transform .05s; }
+/* hover only where something can hover (a mouse or pen), so a tap on a phone doesn't leave a button lit */
+@media (any-hover: hover) {
+  button:not(:disabled):hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background-color: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+  button.primary:not(:disabled):hover { background-color: color-mix(in srgb, var(--accent) 86%, black); border-color: color-mix(in srgb, var(--accent) 86%, black); }
+}
+button:not(:disabled):active { transform: translateY(1px); background-color: color-mix(in srgb, var(--accent) 16%, var(--panel)); box-shadow: inset 0 1px 3px rgba(0,0,0,.18); }
+button.primary:not(:disabled):active { background-color: color-mix(in srgb, var(--accent) 74%, black); }
+button.stop, button.stop:not(:disabled):hover { background-color: var(--err); border-color: var(--err); color: var(--panel); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#tabs button:not(:disabled):hover, #tabs button:not(:disabled):active { background: none; box-shadow: none; transform: none; color: var(--text); }
+/* a query that takes a while: spinner in the status line, a moving bar under the tabs */
+.spinner { display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -2px; border: 2px solid currentColor;
+  border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* over the tab bar's bottom edge, not in the flow: showing it mustn't resize the map, since a resize moves the
+   view (moveend) and re-run on pan would take it for a pan and run the query again, which shows the bar again */
+#busybar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; overflow: hidden; z-index: 1; }
+#busybar[hidden] { display: none; }
+#busybar > div { position: absolute; width: 30%; height: 100%; background: var(--accent); animation: slide 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .spinner, #busybar > div { animation-duration: 3s; } }
+/* minmax(0, …) rows and min-height: 0 keep a long query scrolling inside the editor; otherwise the row grows
+   with it, and the map (and with it {{bbox}}) grows too */
+main { display: grid; grid-template-columns: minmax(280px, var(--left-w, 42%)) 1fr; grid-template-rows: minmax(0, 1fr); height: calc(100% - 48px); }
+#left { grid-column: 1; grid-row: 1; } #right { grid-column: 2; grid-row: 1; }
+/* the line between the query and the map is dragged to resize them (app/map.js): an invisible grip over it,
+   placed in the query's cell and reaching over the line; it shows the line in the accent colour while used */
+#split { grid-column: 1; grid-row: 1; justify-self: end; width: 9px; margin-right: -5px; position: relative; z-index: 4;
+  cursor: col-resize; touch-action: none; outline: none; }
+#split::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 3px; }
+#split:hover::after, #split.drag::after, #split:focus-visible::after { background: var(--accent); }
+body[data-splitting="cols"], body[data-splitting="cols"] * { cursor: col-resize !important; user-select: none; }
+body[data-splitting="rows"], body[data-splitting="rows"] * { cursor: row-resize !important; user-select: none; }
+@media (pointer: coarse) { #split { width: 17px; margin-right: -9px; } #split::after { left: 7px; } }
+#left { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; min-height: 0; }
+#toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
+#toolbar label { color: var(--muted); font-size: 12.5px; display: flex; gap: 4px; align-items: center; }
+#editor { flex: 1; min-height: 0; overflow: hidden; }
+/* CodeMirror 6 (app/editor.js); #editor outranks its own theme's selectors */
+#editor .cm-editor { height: 100%; background: var(--code-bg); color: var(--text); }
+#editor .cm-editor.cm-focused { outline: none; }
+#editor .cm-scroller { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+#editor .cm-gutters { background: var(--code-bg); border-right: 1px solid var(--border); color: var(--muted); }
+#editor .cm-content { caret-color: var(--text); }
+#editor .cm-cursor { border-left-color: var(--text); }
+#editor .cm-selectionBackground { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+@media (pointer: coarse) { #editor .cm-scroller { font-size: 16px; line-height: 1.45; } }   /* iOS zooms into smaller text */
+.cm-keyword { color: var(--kw); } .cm-string { color: var(--str); } .cm-number { color: var(--num); }
+.cm-comment { color: var(--cmt); font-style: italic; } .cm-operator { color: var(--op); } .cm-variable-2 { color: var(--accent); }
+.cm-meta { color: var(--op); font-weight: 600; }
+#status { padding: 7px 12px; border-top: 1px solid var(--border); background: var(--panel); font-size: 12.5px; color: var(--muted); min-height: 32px; }
+#status.ok { color: var(--ok); } #status.err { color: var(--err); }
+#status button { margin-left: 6px; font-size: 12px; padding: 2px 8px; }
+#right { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#tabs { position: relative; display: flex; gap: 2px; padding: 6px 8px 0; background: var(--panel); border-bottom: 1px solid var(--border); }
+#tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 12px; color: var(--muted); }
+#tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+#tabs .badge[hidden] { display: none; }
+#tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; font-size: 11px;
+  background: var(--warn-bg); color: var(--warn); }
+.view { flex: 1; min-height: 0; display: none; overflow: auto; }
+.view.active { display: block; }
+#map { height: 100%; }
+#data pre { margin: 0; padding: 12px; font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre; }
+#table table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+#table th, #table td { border-bottom: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+#table th { position: sticky; top: 41px; background: var(--panel); }
+#table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dbar { padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px;
+  align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 1; }
+#notes { padding: 12px; }
+.note { padding: 9px 12px; border-radius: 8px; margin-bottom: 8px; background: var(--warn-bg); color: var(--warn); }
+.note.err { background: var(--err-bg); color: var(--err); }
+.note.info { background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--text); }
+.note button { margin-top: 8px; margin-right: 6px; }
+.note pre { white-space: pre-wrap; margin: 6px 0 0; font: 12px ui-monospace, Menlo, monospace; color: var(--text); }
+.maplibregl-popup-content { font-size: 12.5px; max-height: 340px; overflow: auto; background: var(--panel); color: var(--text); padding: 10px 12px; }
+.maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+.maplibregl-popup-close-button { color: var(--muted); font-size: 16px; }
+.maplibregl-popup-content table { border-collapse: collapse; margin-top: 4px; }
+.maplibregl-popup-content td { padding: 1px 6px 1px 0; vertical-align: top; overflow-wrap: anywhere; }
+.maplibregl-popup-content td:first-child { color: var(--muted); white-space: nowrap; }
+.maplibregl-popup-content .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.maplibregl-popup-content .acts a, .maplibregl-popup-content .acts button { font-size: 12px; padding: 2px 7px; border: 1px solid var(--border); border-radius: 5px; text-decoration: none; color: var(--accent); background: var(--panel); }
+#savedcard table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#savedcard td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+#savedcard td .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+#wiz-count { min-height: 1.4em; margin-top: 2px; }
+/* the Wizard grows downwards as suggestions, the count and the preview appear, instead of re-centring each time */
+#wizov { align-items: flex-start; }
+#wizcard { margin-top: min(6vh, 48px); }
+#wiz-suggest { min-height: 34px; }
+#wiz-suggest:empty { min-height: 0; }
+.chips button small { color: var(--muted); margin-left: 4px; }
+#area-offer { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; gap: 8px;
+  align-items: center; max-width: calc(100% - 120px); padding: 6px 8px 6px 12px; border-radius: 8px; font-size: 13px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.2); }
+#area-offer[hidden] { display: none; }
+#area-offer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#area-offer button { white-space: nowrap; padding: 3px 9px; }
+.swatch { display: inline-block; width: 11px; height: 11px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--border); border-radius: 2px; }
+.maplibregl-popup-content hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+#basemap { position: absolute; top: 10px; left: 10px; z-index: 2; font-size: 12.5px; padding: 3px 6px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+#basemap[hidden] { display: none; }
+.empty { color: var(--muted); padding: 24px; }
+/* overlays: download progress and the data panel */
+.overlay { position: fixed; inset: 0; background: rgba(10, 14, 20, .45); display: flex; align-items: center;
+  justify-content: center; z-index: 2000; padding: 16px; }
+.overlay[hidden] { display: none; }
+.card { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25); width: min(520px, 100%); padding: 20px 22px; max-height: calc(100vh - 32px); overflow: auto; }
+.card h3 { font-size: 13px; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+#dl { z-index: 2100; }              /* the progress dialogue opens over the other dialogues */
+#excard { width: min(600px, 100%); }
+.exgrid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; }
+.exgrid button { text-align: left; }
+.card h2 { margin: 0 0 4px; font-size: 16px; }
+.card .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; overflow-wrap: anywhere; }
+.bar { height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; position: relative; }
+.bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.bar.indet > div { width: 35%; position: absolute; animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { from { left: -35%; } to { left: 100%; } }
+.prog-stats { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 12.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.dl-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 13.5px; }
+.dl-grid dt { color: var(--muted); } .dl-grid dd { margin: 0; font-variant-numeric: tabular-nums; }
+.dl-msg { padding: 9px 12px; border-radius: 8px; margin-top: 10px; background: var(--warn-bg); color: var(--warn); }
+.dl-msg.err { background: var(--err-bg); color: var(--err); }
+.dl-msg.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.prog-line { margin-top: 10px; font: 11.5px ui-monospace, Menlo, monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#datacard { width: min(880px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
+#datacard h3 { font-size: 13px; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+#datacard table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#datacard th, #datacard td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+#datacard td.num, #datacard th.num { text-align: right; font-variant-numeric: tabular-nums; }
+#datacard tr.active td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.pill { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--accent); color: var(--accent-text); margin-left: 6px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row input[type=text] { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); min-width: 0; }
+.danger { color: var(--err); }
+.tablewrap { overflow-x: auto; }
+.muted { color: var(--muted); font-size: 12.5px; }
+#v-map { position: relative; }
+select optgroup { font-weight: 600; }
+/* phones: the query gets its own tab (Query) instead of a cramped half of the screen, the header wraps onto a
+   second line for the area's name, and the page fits the visible height (dvh: without the browser's bars) */
+#tabs .narrow-only { display: none; }
+@media (max-width: 760px) {
+  body { display: flex; flex-direction: column; height: 100dvh; }
+  header { height: auto; min-height: 48px; flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+  header .meta { order: 3; flex-basis: 100%; font-size: 12px; }
+  main { display: flex; flex-direction: column; height: auto; flex: 1; min-height: 0; }
+  #right { order: 0; flex: 1; min-height: 0; }
+  #left { order: 1; flex: 1; min-height: 0; border-right: 0; }
+  #split { display: none; }
+  #tabs { overflow-x: auto; }
+  #tabs .narrow-only { display: inline-block; }
+  body:not([data-view="query"]) #left { display: none; }
+  body[data-view="query"] #right { flex: none; }
+  body[data-view="query"] #right .view { display: none; }
+  /* a select is as wide as its longest option unless allowed to shrink (min-width: 0) */
+  #toolbar #examples { flex: 1 1 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .card { max-height: calc(100dvh - 32px); }
+}
+/* tablets upright: the editor above a full-width map, instead of a narrow map beside it */
+@media (min-width: 761px) and (max-width: 1100px) and (orientation: portrait) {
+  main { grid-template-columns: 1fr; grid-template-rows: minmax(0, var(--top-h, 38%)) minmax(0, 1fr); height: calc(100dvh - 48px); }
+  #left { border-right: 0; border-bottom: 1px solid var(--border); }
+  #right { grid-column: 1; grid-row: 2; }
+  #split { justify-self: stretch; align-self: end; width: auto; height: 9px; margin: 0 0 -5px; cursor: row-resize; }
+  #split::after { top: 3px; bottom: auto; left: 0; right: 0; width: auto; height: 3px; }
+  @media (pointer: coarse) { #split { width: auto; height: 17px; margin: 0 0 -9px; } #split::after { left: 0; top: 7px; } }
+}
+/* JOSM's remote control runs on the same computer; map-app links are for phones and tablets */
+.touch-only { display: none; }
+@media (pointer: coarse) { .touch-only { display: block; } .desktop-only { display: none !important; } }
+/* touch screens: finger-sized controls, and 16px text in fields so iOS doesn't zoom in on focus */
+@media (pointer: coarse) {
+  button, select { min-height: 40px; }
+  #tabs button { min-height: 40px; }
+  input, select, textarea, #wiz-in { font-size: 16px; }
+  .maplibregl-popup-content .acts a, .maplibregl-popup-content .acts button { padding: 8px 10px; }
+}
+/* browser-only additions */
+header button { white-space: nowrap; flex: none; }
+header h1 { white-space: nowrap; }
+header h1 small { font-weight: 450; color: var(--muted); font-size: 12px; margin-left: 4px; }
+header button.link { background: none; border-color: transparent; color: var(--muted); padding-left: 4px; padding-right: 4px; }
+header button.link:hover { color: var(--text); text-decoration: underline; }
+#privcard { max-width: 620px; }
+#privcard ul { margin: 6px 0 10px; padding-left: 20px; }
+#privcard li { margin: 4px 0; }
+#privcard p { margin: 8px 0; }
+#data { height: 100%; display: flex; flex-direction: column; }
+#data pre { flex: 1; overflow: auto; }
+.row input[type=url] { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); min-width: 0; flex: 1; }
+#datacard .src { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+#datacard td button { padding: 3px 8px; font-size: 12.5px; }
+/* the name wraps and the buttons wrap within their cell, so the row never gets wider than the dialogue */
+#datacard td.name { white-space: normal; min-width: 120px; overflow-wrap: anywhere; }
+#datacard td .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+#dt-form[hidden] { display: none; }
+#wizcard { width: min(640px, 100%); }
+#wiz-in { width: 100%; font: 15px ui-monospace, Menlo, monospace; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg); color: var(--text); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.chips button { font: 12.5px ui-monospace, Menlo, monospace; padding: 3px 8px; border-radius: 12px; }
+/* suggestions (from the saved area, for what is being typed) and examples (fixed) look different, each with a label */
+#wiz-suggest:not(:empty)::before, #wiz-chips::before { font: 11.5px system-ui, sans-serif; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); align-self: center; margin-right: 2px; }
+#wiz-suggest:not(:empty)::before { content: "Suggestions"; }
+#wiz-chips::before { content: "Examples"; }
+#wiz-suggest button { border-radius: 6px; border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel)); color: var(--text); }
+#wiz-chips button { border-style: dashed; background: transparent; color: var(--muted); font-family: system-ui, sans-serif; }
+#wizcard dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12.5px; margin: 10px 0 0; }
+#wizcard dt { font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+#wizcard dd { margin: 0; color: var(--muted); }
+#wiz-out { white-space: pre-wrap; font: 12px ui-monospace, Menlo, monospace; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-top: 10px; max-height: 180px; overflow: auto; }
+#wiz-out[hidden] { display: none; }
+@media (max-width: 900px) { #datacard .src { display: none; } }
+@media (max-width: 560px) {
+  #datacard .narrow-hide { display: none; }
+  #datacard { padding: 16px 14px; }
+  #datacard th, #datacard td { padding: 6px 4px; }
+}
+header { min-width: 0; overflow: hidden; }
+@media (max-width: 520px) {
+  header { gap: 6px; padding: 0 8px; }
+  header h1 small { display: none; }
+  header button { padding: 5px 8px; font-size: 13px; }
+}
+.row.wide { width: 100%; }
+/* narrow phones (e.g. 280-480 px): dialogues use the whole screen, and two-column lists stack */
+@media (max-width: 480px) {
+  .overlay { padding: 8px; }
+  .card, #datacard { padding: 16px 14px; max-height: calc(100dvh - 16px); }
+  .card h3 { margin-top: 14px; }
+  #wizcard { margin-top: 0; }
+  .exgrid { grid-template-columns: 1fr; gap: 2px; }
+  .exgrid button { justify-self: start; min-width: 9em; margin-top: 8px; }
+  #wizcard dl { grid-template-columns: 1fr; gap: 0; }
+  #wizcard dt { white-space: normal; overflow-wrap: anywhere; margin-top: 6px; }
+  #wizcard dd { padding-left: 12px; }
+  .dl-grid { gap: 2px 10px; }
+  .prog-stats { flex-wrap: wrap; }
+  #privcard ul { padding-left: 16px; }
+}
+#dt-form { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-top: 10px; display: grid; gap: 8px; }
+</style>
+</head>
+<body>
+<noscript><p style="padding:16px;max-width:640px">Bypass Web runs Overpass QL queries on OpenStreetMap data saved in your browser. It needs JavaScript, and a browser from the last few years.</p></noscript>
+<header>
+  <h1>Bypass Web</h1>
+  <span class="meta" id="meta">starting…</span>
+  <span class="spacer"></span>
+  <button id="privbtn" class="link" title="Accuracy, privacy, source code and credits">About</button>
+  <button id="databtn" title="Saved areas: open, export, import, delete; browser storage">Saved areas</button>
+  <button id="loadarea" title="Download the bundle's tiles covering the map view and keep them in this browser">Load this area</button>
+</header>
+<main>
+  <section id="left">
+    <div id="toolbar">
+      <button class="primary" id="run" title="Run (Ctrl/Cmd+Enter)">Run</button>
+      <button id="wizbtn" title="Build a query from a short description (Overpass Turbo's wizard)">Wizard</button>
+      <button id="savebtn" title="Keep this query in this browser; saved queries are at the top of Examples">Save</button>
+      <button id="exportbtn" title="Save the last result as GeoJSON, GPX, KML, CSV or raw data, load it into JOSM, or copy the query">Export</button>
+      <button id="share" title="Copy a link to this query and map view (after the # sign, so it isn't sent to this site's server)">Share</button>
+      <select id="examples" aria-label="Example queries"><option value="">Examples…</option></select>
+      <label title="Off by default: running a query never moves the map, so {{bbox}} stays what you see"><input type="checkbox" id="fit"> zoom to data</label>
+      <label title="Off by default: when the map stops moving, a query with {{bbox}} or {{center}} runs again for the new view, within the saved area"><input type="checkbox" id="live"> re-run on pan</label>
+      <label><input type="checkbox" id="untagged"> untagged nodes</label>
+    </div>
+    <div id="editor"></div>
+    <div id="status">Ctrl/Cmd+Enter runs the query. {{bbox}} and {{center}} come from the map view. Nothing is sent to a server: queries run in this tab.</div>
+  </section>
+  <div id="split" role="separator" tabindex="0" aria-label="Resize the query and the map" aria-valuemin="0" aria-valuemax="100"
+       title="Drag to resize; double-click for the usual sizes"></div>
+  <section id="right">
+    <nav id="tabs">
+      <button data-v="query" class="narrow-only">Query</button>
+      <button data-v="map" class="active">Map</button>
+      <button data-v="data">Data</button>
+      <button data-v="table">Table</button>
+      <button data-v="notes">Notes<span class="badge" id="nbadge" hidden>0</span></button>
+      <div id="busybar" hidden><div></div></div>
+    </nav>
+    <div class="view active" id="v-map"><div id="map"></div><div id="area-offer" role="status" hidden><span></span><button class="open primary"></button><button class="close" aria-label="Don't offer this area">×</button></div><select id="basemap" title="Background map (results are drawn on top)" aria-label="Background map"></select></div>
+    <div class="view" id="v-data"><div id="data"><div class="empty">Run a query to see the raw response.</div></div></div>
+    <div class="view" id="v-table"><div id="table"><div class="empty">Run a query to see a table.</div></div></div>
+    <div class="view" id="v-notes"><div id="notes"><div class="empty">No notes.</div></div></div>
+  </section>
+</main>
+
+<div class="overlay" id="dl" hidden role="dialog" aria-modal="true" aria-labelledby="dl-title">
+  <div class="card">
+    <h2 id="dl-title">Download this area</h2>
+    <div class="sub" id="dl-sub"></div>
+    <div id="dl-body"></div>
+    <div id="dl-prog" hidden>
+      <div class="bar indet" id="pg-bar"><div></div></div>
+      <div class="prog-stats"><span id="pg-left"></span><span id="pg-right"></span></div>
+      <p class="muted" id="pg-note"></p>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button id="dl-secondary">Cancel</button><button id="dl-primary" class="primary">Download</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="wizov" hidden role="dialog" aria-modal="true" aria-labelledby="wiz-title">
+  <div class="card" id="wizcard">
+    <div class="row" style="justify-content:space-between"><h2 id="wiz-title">Wizard</h2><button id="wiz-close">Close</button></div>
+    <div class="sub">Describe what to find; it becomes an Overpass query you can edit. This is Overpass Turbo's wizard, with iD's preset names.</div>
+    <input type="text" id="wiz-in" placeholder="e.g. Drinking Water, or amenity=cafe and wheelchair=yes" autocomplete="off" spellcheck="false">
+    <div class="chips" id="wiz-suggest" aria-label="Suggestions from the saved area"></div>
+    <div class="muted" id="wiz-count" aria-live="polite"></div>
+    <div class="chips" id="wiz-chips"></div>
+    <div class="row"><label class="muted"><input type="radio" name="wiz-out" value="geom" checked> full geometry</label>
+      <label class="muted"><input type="radio" name="wiz-out" value="center"> one point each</label></div>
+    <div id="wiz-msg"></div>
+    <pre id="wiz-out" hidden></pre>
+    <details style="margin-top:8px"><summary class="muted">Syntax</summary>
+      <dl>
+        <dt>Drinking Water</dt><dd>a feature name from iD (synonyms work too: "water fountain")</dd>
+        <dt>amenity=cafe</dt><dd>a tag</dd>
+        <dt>shop=*</dt><dd>has the key, any value</dd>
+        <dt>opening_hours!=*</dt><dd>doesn't have the key</dd>
+        <dt>name~castle</dt><dd>value matches a regular expression; name~/castle/i ignores case</dd>
+        <dt>… and … / … or …</dt><dd>combine conditions; brackets work</dd>
+        <dt>type:node</dt><dd>only points (or way, relation)</dd>
+        <dt>… around Leith</dt><dd>within 1 km of a place, looked up by name in the saved area</dd>
+        <dt>… in Leith</dt><dd>inside a named area, looked up by name in the saved area</dd>
+        <dt>… global</dt><dd>the whole saved area instead of the map view</dd>
+        <dt>cafe without a wheelchair tag</dt><dd>the tag is missing: not mapped yet, which isn't wheelchair=no (with: has the tag, any value)</dd>
+        <dt>pub named crown</dt><dd>name contains the word, any case</dd>
+        <dt>bench within 200 m of Leith</dt><dd>around a place, with your own radius (m or km)</dd>
+        <dt>cafes within 200 m of a pub</dt><dd>near any feature of a kind (near: within 100 m); plurals and "a"/"the" are fine</dd>
+        <dt>shop not checked for 2 years</dt><dd>check_date older than that, or none</dd>
+      </dl>
+    </details>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button id="wiz-insert">Insert query</button><button id="wiz-run" class="primary">Insert and run</button>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="savedov" hidden role="dialog" aria-modal="true" aria-labelledby="sv-title">
+  <div class="card" id="savedcard">
+    <div class="row" style="justify-content:space-between"><h2 id="sv-title">Saved queries</h2><button id="sv-close">Close</button></div>
+    <div class="sub">Kept in this browser only. Save in the toolbar adds the query in the editor.</div>
+    <div class="tablewrap"><table id="sv-list"></table></div>
+  </div>
+</div>
+<div class="overlay" id="exportov" hidden role="dialog" aria-modal="true" aria-labelledby="ex-title">
+  <div class="card" id="excard">
+    <div class="row" style="justify-content:space-between"><h2 id="ex-title">Export</h2><button id="ex-close">Close</button></div>
+    <div class="sub" id="ex-sub"></div>
+    <div class="touch-only">
+      <h3>Open in an app</h3>
+      <div class="exgrid">
+        <button id="ex-comaps">CoMaps</button><span class="muted" id="ex-comaps-note">the results as named points, in the CoMaps app (or on comaps.at)</span>
+      </div>
+    </div>
+    <h3>Data</h3>
+    <p class="muted ex-licence">Data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, under the ODbL: credit OpenStreetMap wherever you use or share it. Datasets made from it stay under the ODbL.</p>
+    <div class="exgrid">
+      <button id="ex-geojson">GeoJSON</button><span class="muted">for QGIS, uMap, MapLibre and most GIS tools</span>
+      <button id="ex-gpx">GPX</button><span class="muted">points as waypoints, lines and outlines as tracks, for GPS devices and apps</span>
+      <button id="ex-kml">KML</button><span class="muted">for Google Earth, with the tags</span>
+      <button id="ex-csv">CSV table</button><span class="muted">one row per object, one column per tag, for spreadsheets</span>
+      <button id="ex-raw">Raw data</button><span class="muted">the result exactly as the engine gave it</span>
+    </div>
+    <h3 class="desktop-only">Edit</h3>
+    <div class="exgrid desktop-only">
+      <button id="ex-josm">Load into JOSM</button><span class="muted">the current versions from the OSM API, ready to edit (JOSM's remote control must be on)</span>
+    </div>
+    <h3>Query</h3>
+    <div class="exgrid">
+      <button id="ex-query">Copy query</button><span class="muted">the text in the editor</span>
+      <button id="ex-link">Copy link</button><span class="muted">opens this query and map view in this page, with the reader's own saved areas</span>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="dataov" hidden role="dialog" aria-modal="true" aria-labelledby="dt-title">
+  <div class="card" id="datacard">
+    <div class="row" style="justify-content:space-between"><h2 id="dt-title">Saved areas</h2><button id="dt-close">Close</button></div>
+    <div class="sub">Kept in this browser's storage for this site (not in a folder you can see). Export saves one as a file; Import reads it back, here or in another browser. An exported area is OpenStreetMap data under the ODbL: if you pass it on, say so: &copy; OpenStreetMap contributors, openstreetmap.org/copyright</div>
+    <div id="dt-disk"></div>
+    <h3>Saved areas</h3>
+    <div class="tablewrap"><table id="dt-files"></table></div>
+    <div class="row" style="margin-top:10px">
+      <button id="dt-newbtn">New saved area…</button>
+      <button id="dt-import">Import .gob file…</button>
+      <input type="file" id="dt-file" accept=".gob" hidden>
+    </div>
+    <div id="dt-form" hidden>
+      <div class="row wide"><label class="muted" for="dt-newname" style="width:60px">Name</label><input type="text" id="dt-newname" placeholder="optional: named after the place when you load it" style="flex:1"></div>
+      <div class="row wide"><label class="muted" for="dt-newsrc" style="width:60px">Bundle</label><input type="url" id="dt-newsrc"></div>
+      <div class="row" style="justify-content:flex-end"><span class="muted" style="flex:1">A new saved area starts empty; Load this area fills it. The bundle must allow range requests from this page (CORS).</span><button id="dt-create" class="primary">Create</button></div>
+    </div>
+    <p class="muted" id="dt-note"></p>
+  </div>
+</div>
+<div class="overlay" id="privov" hidden role="dialog" aria-modal="true" aria-labelledby="pv-title">
+  <div class="card" id="privcard">
+    <div class="row" style="justify-content:space-between"><h2 id="pv-title">About this page</h2><button id="pv-close">Close</button></div>
+    <h3>Questions and problems</h3>
+    <p>Please report problems and ask questions on the <a href="https://github.com/osmuser63783/bypass-web/issues" target="_blank" rel="noopener">issue tracker</a>.</p>
+    <h3>How accurate are the results?</h3>
+    <p>Bypass reads the same query language as Overpass, and its answers have been checked against the real Overpass API running on the same map data. The test covers about 3,000 queries, real and synthetic ones. The answers match (the same objects, with the same tags and shapes, in the same order), except the following known differences:</p>
+    <ul>
+      <li><strong>The data is up to a day old:</strong> public Overpass servers are usually minutes behind OpenStreetMap. The data Bypass uses is rebuilt once a day (its date is in the header), so to check today's edits, come back tomorrow and click Load this area: when newer data is out, it offers to update your saved area before you rerun your query.</li>
+      <li><strong>Only inside your saved area:</strong> the data is complete inside the outlined area. Results beyond it may be missing; they're dimmed, and Load this area fills the gap. A query about a place that reaches outside it asks you to load the rest.</li>
+      <li><strong>Relations that reach beyond your saved area,</strong> such as a bus route, a long-distance path or a country's border: Bypass finds the relation, but its members outside the saved area are missing from everything: the member list in the results, its shape on the map, its members (<code>&gt;</code>) and member counts. Overpass always has the whole relation. When a query lists or follows them, the Notes tab says some are missing; loading the rest of the area completes the relation. A relation used as an area (a boundary in <code>area[…]</code> or <code>map_to_area</code>) is never used with part of its outline: the query asks you to load the rest instead.</li>
+      <li><strong>No edit history:</strong> with Overpass, you can check who edited what and when, version numbers and old states of the map. Bypass does not support this. Queries that ask for them (<code>out meta</code>, <code>[date:]</code>, <code>[diff:]</code>, filters on user or version) are refused rather than answered without them. Load into JOSM fetches the current versions from OpenStreetMap when you want to edit.</li>
+      <li><strong>Place names</strong> (<code>{{geocodeArea:…}}</code> and the like) are looked up in the saved data using a crude set of rules, not on Nominatim. For a name that several places inside the saved data share, the results may differ. The Notes tab says which place was used.</li>
+      <li><strong>Overpass's own mistakes aren't copied:</strong> in a few rare cases Overpass gets an answer wrong. Bypass follows Overpass's documented rules there, so its answer differs and is the right one.</li>
+      <li><strong>Right on a border:</strong> a point within about a centimetre of an area's boundary can land on the other side.</li>
+      <li><strong>Very broad queries:</strong> a search whose only condition is a calculation (<code>if:</code>) or "not equal to" would have to read everything, which Overpass does slowly. Bypass stops with "Filters too weak": add a tag or an area to narrow it.</li>
+      <li><strong>Error messages</strong> for broken queries are the same as Overpass's, apart from a handful worded more plainly.</li>
+    </ul>
+    <h3>Privacy</h3>
+    <!-- ANALYTICS: a release built with `node tools-release.mjs --analytics <token>` uses the paragraph in the comment below instead -->
+    <p id="pv-tracking">This page has no accounts, cookies, analytics or tracking. Queries run in this tab: their text and results aren't sent anywhere.</p>
+    <!-- ANALYTICS-ON <p id="pv-tracking">This page has no accounts, cookies or advertising. Queries run in this tab: their text and results aren't sent anywhere. It counts visits with <a href="https://www.cloudflare.com/web-analytics/" target="_blank" rel="noopener">Cloudflare Web Analytics</a>, once per page load, without cookies or storing anything in your browser. This is to understand how the tool is used and which features to prioritise for future development (e.g. multiple languages, better support for mobile devices). Your browser loads Cloudflare's counting script from static.cloudflareinsights.com and sends Cloudflare the page's address (not the part after #, where shared links keep their query), the page that linked here, your browser, device type and country, and how fast the page loaded. Cloudflare says it discards your IP address at its nearest data centre and doesn't store it. If your browser sends Do Not Track or Global Privacy Control, the script isn't loaded and nothing is counted.</p> -->
+    <p>Your browser does contact these servers, and each of them sees your IP address, as any website does:</p>
+    <ul>
+      <li>the site serving this page: Cloudflare Pages (<a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare's privacy policy</a>);</li>
+      <li>the <strong>background map</strong>: OpenFreeMap, or openstreetmap.org's tiles if you pick them. It also sees which part of the world you look at. "No basemap" avoids it;</li>
+      <li>the <strong>bundle</strong>, when you load or update an area: by default download.openplanetdata.com, which logs the file, time, IP address and user agent (<a href="https://openplanetdata.com/privacy/" target="_blank" rel="noopener">Open Planet Data's privacy policy</a>). The parts of the file you fetch show roughly which area you loaded;</li>
+      <li>any address a query's <code>style:</code> section names (styles, tiles, icons). A shared link whose query does this doesn't run until you press Run.</li>
+    </ul>
+    <p>Only when you click: <strong>Load into JOSM</strong> talks to JOSM on your own computer, which then downloads the objects from the OpenStreetMap API. <strong>Open in CoMaps</strong> puts the results' names and positions in the link, so comaps.at sees them if the app isn't installed. Links to openstreetmap.org, Wikidata and other sites open those sites.</p>
+    <p><strong>Kept in this browser</strong>, for this site only: saved areas, saved queries and settings. Saved areas has Delete; clearing this site's data in your browser removes everything.</p>
+    <p><strong>Share links</strong> carry the query and map view after the # in the address: anyone who opens the link can read them, but browsers don't send that part to the site serving this page.</p>
+    <h3>Source code</h3>
+    <p>Bypass is free software under the <a href="LICENSE.txt" target="_blank" rel="noopener">GNU Affero General Public License 3.0 or later</a>. The JavaScript this page runs is served as written, not minified, so its files are its source; the repository is <a href="https://github.com/osmuser63783/bypass-web" target="_blank" rel="noopener">github.com/osmuser63783/bypass-web</a>.</p>
+    <p>The map data may be incomplete, wrong or out of date: check before you rely on it.</p>
+    <h3>Credits</h3>
+    <ul>
+      <li>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, under the ODbL. The planet bundle is published by <a href="https://openplanetdata.com" target="_blank" rel="noopener">Open Planet Data</a>.</li>
+      <li>The query language is the <a href="https://github.com/drolbr/Overpass-API" target="_blank" rel="noopener">Overpass API</a>'s, by Roland Olbricht et al.; parts are ported from its source.</li>
+      <li>Shortcuts and the Wizard come from <a href="https://github.com/tyrasd/overpass-turbo" target="_blank" rel="noopener">Overpass Turbo</a> by Martin Raifer; feature names from iD's tagging schema; value links from tag2link; front-matter styling follows <a href="https://overpass-ultra.us" target="_blank" rel="noopener">Overpass Ultra</a>.</li>
+      <li>Built with MapLibre GL JS, CodeMirror and js-yaml; basemaps by <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>.</li>
+    </ul>
+    <p class="muted">Licences and full notices: <a href="LICENSES.txt" target="_blank" rel="noopener">LICENSES.txt</a>.</p>
+  </div>
+</div>
+
+<!-- the page: ES modules, entered through app/main.js (they import ui-map.js and MapLibre) -->
+<script type="module" src="app/main.js"></script>
+</body>
+</html>

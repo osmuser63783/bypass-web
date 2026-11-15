@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Bypass Web's icon: a road (way blue) that detours around an obstacle (node orange) inside a round badge,
+       the colours of the page's query results; a lighter ring in dark mode -->
+  <style>
+    .ring { fill: #ffffff; stroke: #1f2937; }
+    .road { fill: none; stroke: #2563eb; stroke-linecap: round; stroke-linejoin: round; }
+    .arrow { fill: #2563eb; }
+    .stop { fill: #c2410c; }
+    @media (prefers-color-scheme: dark) {
+      .ring { fill: #111827; stroke: #e5e7eb; }
+      .road { stroke: #60a5fa; }
+      .arrow { fill: #60a5fa; }
+      .stop { fill: #fb923c; }
+    }
+  </style>
+  <circle class="ring" cx="16" cy="16" r="14.5" stroke-width="2"/>
+  <circle class="stop" cx="16" cy="12.5" r="3.6"/>
+  <path class="road" stroke-width="3" d="M5 12.5 H8.5 C11.5 12.5 11.5 21.5 16 21.5 C20.5 21.5 20.5 12.5 23.5 12.5 H24"/>
+  <path class="arrow" d="M23 8.6 L28 12.5 L23 16.4 Z"/>
+</svg>

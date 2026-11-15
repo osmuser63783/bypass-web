@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser engine test</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+  textarea { width: 100%; height: 5em; font: 13px ui-monospace, monospace; }
+  pre { background: #f4f4f4; padding: 8px; overflow: auto; max-height: 50vh; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } pre { background: #222; } }
+</style>
+<h1>Overpass QL in the browser (no server)</h1>
+<p>Bundle: <input id="src" size="80" value="https://download.openplanetdata.com/osm/planet/gob/v1/planet-latest.osm.gob"></p>
+<p>Area (W,S,E,N): <input id="box" size="40" value="-3.20,55.94,-3.18,55.96"> <button id="load">Load area</button></p>
+<textarea id="q">[out:json]; nwr[amenity=pub](55.945,-3.195,55.955,-3.185); out center;</textarea>
+<p><button id="run">Run query</button></p>
+<pre id="log"></pre>
+<script src="dist/bypass.js"></script>
+<script>
+  const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+  const { Bundle, urlSource, TileStore, Engine } = Bypass;
+  let store, engine;
+  window.loadArea = async () => {
+    const t0 = performance.now();
+    const bundle = await Bundle.open(urlSource(document.getElementById('src').value));
+    log(`bundle: ${bundle.header.tileCount} tiles, revision ${bundle.header.revision}, data ${new Date(bundle.header.revisionTimestamp).toISOString()} (${Math.round(performance.now() - t0)} ms)`);
+    store = new TileStore(bundle);
+    engine = new Engine(store);
+    const [w, s, e, n] = document.getElementById('box').value.split(',').map(Number);
+    let bytes = 0;
+    const count = await store.loadBox(w, s, e, n, { onTile: (t, len) => { bytes += len; } });
+    log(`loaded ${count} tiles (${(bytes / 1e6).toFixed(1)} MB uncompressed), ${store.featureCount} features, ${Math.round(performance.now() - t0)} ms total`);
+    return { count, features: store.featureCount, ms: Math.round(performance.now() - t0) };
+  };
+  window.runQuery = (q) => {
+    const t0 = performance.now();
+    const r = engine.run(q ?? document.getElementById('q').value);
+    log(`${r.elements.length} elements in ${Math.round(performance.now() - t0)} ms`);
+    log(JSON.stringify(r.elements.slice(0, 3), null, 1));
+    return r;
+  };
+  document.getElementById('load').onclick = () => loadArea().catch(e => log('ERROR ' + e.message));
+  document.getElementById('run').onclick = () => { try { runQuery(); } catch (e) { log('ERROR ' + e.message); } };
+</script>

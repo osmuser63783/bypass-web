@@ -1,0 +1,7 @@
+# Third-party sources unpacked for reference while writing the readers (not ours)
+vendor-src/
+# The release folder written by tools-release.mjs
+site/
+# macOS folder metadata, and Claude Code's bookkeeping folders
+.DS_Store
+.claude/
